@@ -177,6 +177,52 @@ func TestSyncChargerPhasesByGetter(t *testing.T) {
 	}
 }
 
+// TestPreparePhaseGetterStartup verifies that on startup a 1p3p charger implementing
+// PhaseGetter is polled so that lp.phases is initialized to the actual phase count
+// instead of defaulting to 3 (unknownPhases) when no measured data is available yet.
+func TestPreparePhaseGetterStartup(t *testing.T) {
+	tc := []struct {
+		chargerPhases int
+		wantPhases    int
+	}{
+		{1, 1}, // charger currently charging on 1p
+		{3, 3}, // charger currently charging on 3p
+		{0, 0}, // charger returns unknown -> stay at 0
+	}
+
+	for _, tc := range tc {
+		t.Logf("%+v", tc)
+		ctrl := gomock.NewController(t)
+
+		ch := api.NewMockCharger(ctrl)
+		ps := api.NewMockPhaseSwitcher(ctrl)
+		pg := api.NewMockPhaseGetter(ctrl)
+
+		charger := struct {
+			api.Charger
+			api.PhaseSwitcher
+			api.PhaseGetter
+		}{ch, ps, pg}
+
+		ch.EXPECT().Enabled().Return(false, nil)
+		pg.EXPECT().GetPhases().Return(tc.chargerPhases, nil)
+
+		lp := &Loadpoint{
+			log:        util.NewLogger("foo"),
+			bus:        evbus.New(),
+			clock:      clock.New(),
+			charger:    charger,
+			minCurrent: 6,
+			maxCurrent: 16,
+		}
+
+		uiChan, pushChan, lpChan := createChannels(t)
+		lp.Prepare(new(Site), uiChan, pushChan, lpChan)
+
+		assert.Equal(t, tc.wantPhases, lp.phases)
+	}
+}
+
 func TestSyncChargerPhasesByMeasurement(t *testing.T) {
 	tc := []struct {
 		lpPhases, actualPhases, outPhases int
