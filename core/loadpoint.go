@@ -660,7 +660,7 @@ func (lp *Loadpoint) Prepare(site site.API, uiChan chan<- util.Param, pushChan c
 	}
 
 	// for 1p3p chargers, initialize actual phases from charger via PhaseGetter if available
-	if lp.hasPhaseSwitching() && lp.phases == 0 {
+	if lp.hasPhaseSwitching() {
 		if pg, ok := lp.charger.(api.PhaseGetter); ok {
 			if phases, err := pg.GetPhases(); err == nil && phases > 0 {
 				lp.log.DEBUG.Printf("charger reported %dp on startup", phases)
